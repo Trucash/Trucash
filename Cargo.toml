@@ -1,0 +1,6 @@
+[package]
+name = "trucash"
+version = "0.1.0"
+authors = ["Full Name <erwintaketeshi1@protonmail.com>"]
+
+[dependencies]
