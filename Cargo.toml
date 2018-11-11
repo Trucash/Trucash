@@ -4,3 +4,8 @@ version = "0.1.0"
 authors = ["Full Name <erwintaketeshi1@protonmail.com>"]
 
 [dependencies]
+rkv = "*"
+
+[[bin]]
+path = "./trucash/main.rs"
+name = "trucashd"
