@@ -5,6 +5,10 @@ authors = ["Full Name <erwintaketeshi1@protonmail.com>"]
 
 [dependencies]
 rkv = "*"
+curve25519-dalek = { version = "1.0.0-pre.0", features = ["serde"] }
+rand = "0.5"
+bulletproofs = {path = "../bulletproofs"}
+merlin = "1.0.0-pre.0"
 
 [[bin]]
 path = "./trucash/main.rs"
