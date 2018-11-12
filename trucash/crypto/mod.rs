@@ -34,10 +34,11 @@ pub fn generate_pedersen(amount: u64, blinding: &Scalar) -> Result<[u8;32], Supe
 
 /// Creates a diffie-hellman
 /// shared secret and returns it
-pub fn create_diffie_hellman(private_key: &[u8], public_key: &[u8]) {
-
+pub fn create_diffie_hellman(private_key: Scalar, public_key: CompressedRistretto) -> CompressedRistretto {
+	let secret_key = (private_key * public_key.decompress().unwrap()).compress();
+	return secret_key;
 }
 
 pub fn hash() {
-	
+
 }
