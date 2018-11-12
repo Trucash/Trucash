@@ -7,6 +7,9 @@ use self::curve25519_dalek::{ 	constants, scalar::Scalar,
 								ristretto::{ RistrettoPoint, CompressedRistretto }
 							};
 
+extern crate byteorder;
+use byteorder::{LittleEndian, WriteBytesExt, ReadBytesExt, BigEndian, ByteOrder};
+
 /// Initializes the chain with a genesis hash
 /// and an original coinbase utxo
 pub fn init_chain() -> Result<bool, SuperError> {
@@ -68,8 +71,14 @@ pub fn init_utxo(receiver: RistrettoPoint) -> Result<bool, SuperError> {
 	utxo.append(&mut masked_blinding_factor.to_bytes().to_vec());
 	utxo.append(&mut masked_amount.to_bytes().to_vec());
 
-	// Write the utxo into the database
+	/// Write the utxo into the database
+	let mut utxo_count = database::read_chain_params_db(vec![0,1])?;
+	database::write_utxos_db(utxo_count.clone(), utxo);
 
+	/// Update the utxo count
+	let mut n_utxo_count = BigEndian::read_u64(&mut utxo_count);
+	BigEndian::write_u64(&mut utxo_count, n_utxo_count+1);
+	database::write_chain_params_db(vec![0,1], utxo_count);
 
 	return Ok(true);
 }

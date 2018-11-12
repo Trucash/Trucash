@@ -9,6 +9,7 @@ curve25519-dalek = { version = "1.0.0-pre.0", features = ["serde"] }
 rand = "0.5"
 bulletproofs = {path = "../bulletproofs"}
 merlin = "1.0.0-pre.0"
+byteorder = "*"
 
 [[bin]]
 path = "./trucash/main.rs"

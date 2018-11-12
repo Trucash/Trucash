@@ -47,8 +47,23 @@ pub fn read_blocks_db() {
 
 }
 
-pub fn read_chain_params_db() {
-	
+pub fn read_chain_params_db(key: Vec<u8>) -> Result<Vec<u8>, SuperError> {
+	let path = Path::new("../db/chain_params");
+	let created_arc = Manager::singleton().write().unwrap().get_or_create(path, Rkv::new).unwrap();
+	let env = created_arc.read().unwrap();
+	let store: Store = env.open_or_create_default().unwrap(); 
+	let reader = env.read().expect("reader");
+
+	let read_data = match reader.get(&store, key).unwrap().unwrap() {
+		Value::Blob(i) => i.to_vec(),
+		_ => { 
+			return Err(SuperError { 
+						description: String::from("No data exists at this key"),
+						place: String::from("`read_chain_params_db()`")
+					}); 
+		}
+	};
+	return Ok(read_data);
 }
 
 pub fn read_utxos_db(key: Vec<u8>) -> Result<Vec<u8>, SuperError> {	
