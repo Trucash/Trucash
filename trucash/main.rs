@@ -13,7 +13,6 @@ use self::curve25519_dalek::{ 	constants, scalar::Scalar, traits::MultiscalarMul
 								ristretto::{ RistrettoPoint, CompressedRistretto }
 							};
 
-
 fn main() {
 	if database::read_chain_params_db(vec![0,0]).unwrap_or(vec![0])[0] == 0 {
 		init::init_chain();

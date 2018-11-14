@@ -57,12 +57,23 @@ pub fn write_utxos_db(key: Vec<u8>, data: Vec<u8>) {
 	writer.commit().unwrap();
 }
 
+pub fn write_wallet_db(key: Vec<u8>, data: Vec<u8>) {
+	let path = Path::new("./db/wallet");
+	let created_arc = Manager::singleton().write().unwrap().get_or_create(path, Rkv::new).unwrap();
+	let env = created_arc.read().unwrap();
+	let store: Store = env.open_or_create_default().unwrap(); 
+
+	let mut writer = env.write().unwrap(); //create write tx
+	writer.put(&store, key,  &Value::Blob(&data)).unwrap();
+	writer.commit().unwrap();
+}
+
 pub fn read_blocks_db() {
 
 }
 
-
-pub fn get_balance(priv_key1: Scalar, pub_key2: CompressedRistretto) -> Result<u64, SuperError> {
+//todo: write all utxos to wallet db + the amounts they are worth
+pub fn get_balance(priv_key1: Scalar, pub_key2: CompressedRistretto) -> Result<(u64, Vec<Vec<u8>>), SuperError> {
 	let path = Path::new("./db/utxos");
 	let created_arc = Manager::singleton().write().unwrap().get_or_create(path, Rkv::new).unwrap();
 	let env = created_arc.read().unwrap();
@@ -80,18 +91,24 @@ pub fn get_balance(priv_key1: Scalar, pub_key2: CompressedRistretto) -> Result<u
 	};
 
 	let mut balance: u64 = 0;
-	while true {
+	let mut utxos: Vec<Vec<u8>> = Vec::new();
+	loop {
 		match iterator.next() {
-			Some(i) => if let Value::Blob(s) = i.1.unwrap().unwrap() {
+			Some(i) =>  {
+				let utxo_bytes = match i.1.unwrap().unwrap() {
+					Value::Blob(s) => s,
+					_ => break
+				};
+
 				let mut stealth_address: [u8;32] = [0;32];
-				stealth_address.copy_from_slice(&s[0..32]);
+				stealth_address.copy_from_slice(&utxo_bytes[0..32]);
 				let mut utxo_key: [u8;32] = [0;32];
-				utxo_key.copy_from_slice(&s[32..64]);
+				utxo_key.copy_from_slice(&utxo_bytes[32..64]);
 
 				let stealth_address: CompressedRistretto = CompressedRistretto(stealth_address);
 				let utxo_key: CompressedRistretto = CompressedRistretto(utxo_key);
 
-				//priv key1 * utxo_key + pub key 2 == stealth_address
+				//((priv key1 * utxo_key) * basepoint) + pub key 2 == stealth_address
 				//[utxokey, pubkey2] privkey1
 				//check if utxo stealth address matches that of the wallet address
 				if crypto::generate_stealth_address(&[utxo_key, pub_key2], priv_key1) != stealth_address {
@@ -99,7 +116,7 @@ pub fn get_balance(priv_key1: Scalar, pub_key2: CompressedRistretto) -> Result<u
 				}
 
 				let mut masked_amount: [u8;32] = [0;32];
-				masked_amount.copy_from_slice(&s[64..96]);
+				masked_amount.copy_from_slice(&utxo_bytes[64..96]);
 				let masked_amount = Scalar::from_bytes_mod_order(masked_amount);
 
 				//get the diffie hellman and check the amount
@@ -111,12 +128,17 @@ pub fn get_balance(priv_key1: Scalar, pub_key2: CompressedRistretto) -> Result<u
 				let amount = LittleEndian::read_u64(&mut amount.to_bytes());
 
 				balance += amount;
+
+				//utxos.extend_from_slice(&stealth_address);
+
 			},
 			_ => break
 		}
 	}
+	//let mut index: Vec<u8> = vec![1];
+	//write_wallet_db(index, utxos);
 
-	return Ok(balance);
+	return Ok((balance, utxos));
 }
 
 pub fn read_chain_params_db(key: Vec<u8>) -> Result<Vec<u8>, SuperError> {

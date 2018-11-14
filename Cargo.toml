@@ -10,6 +10,7 @@ rand = "0.5"
 bulletproofs = {path = "../bulletproofs"}
 merlin = "1.0.0-pre.0"
 byteorder = "*"
+sha2 = "*"
 
 [[bin]]
 path = "./trucash/main.rs"
