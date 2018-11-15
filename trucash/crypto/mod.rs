@@ -31,12 +31,6 @@ pub fn create_address() -> ([CompressedRistretto;2], [Scalar; 2]) {
 	return (address, priv_keys);
 }
 
-//get the txpubkey
-//check if it matches our address
-//get the diffiehellman key
-//get the amount
-//save the utxo
-
 /// new address -> arG + bG -> aR + B -> rA + B
 /// (H_s(privkey * pubkey1) * basepoint) + pubkey2
 pub fn generate_stealth_address(pub_addresses: &[CompressedRistretto], priv_key: Scalar) -> CompressedRistretto {

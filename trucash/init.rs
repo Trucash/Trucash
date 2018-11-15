@@ -49,7 +49,7 @@ pub fn init_utxo(receiver: &[CompressedRistretto]) -> Result<bool, SuperError> {
 	/// Generate the diffie-hellman public key
 	/// This is the shared secret between the reciever and the
 	/// network (because its scalar is just 0x01 padded with 32 bytes)
-	let mut diffie_hellman_key = crypto::create_diffie_hellman(private_key, receiver[0]);
+	let diffie_hellman_key = crypto::create_diffie_hellman(private_key, receiver[0]);
 
 	/// Serialize the diffie-hellman key into a scalar so that
 	/// its ready to be added/subtracted to and can

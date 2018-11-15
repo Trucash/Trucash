@@ -3,6 +3,7 @@ mod database;
 mod crypto;
 mod error;
 mod wallet;
+mod transaction;
 
 extern crate byteorder;
 
@@ -25,7 +26,8 @@ fn main() {
 	let (priv_key1, priv_key2) = ([147, 102, 50, 185, 99, 31, 203, 134, 93, 10, 174, 165, 250, 28, 177, 220, 204, 155, 147, 120, 212, 12, 50, 103, 225, 4, 7, 81, 152, 87, 93, 11], [72, 240, 8, 187, 148, 30, 194, 143, 36, 1, 207, 62, 23, 43, 89, 217, 42, 211, 232, 12, 222, 1, 250, 34, 44, 142, 97, 187, 231, 23, 77, 11]);
 	let (priv_key1, priv_key2) = (Scalar::from_bytes_mod_order(priv_key1), Scalar::from_bytes_mod_order(priv_key2));
 
-	let amount = database::get_balance(priv_key1, pub_key2);
+	let amount = wallet::get_balance(priv_key1, pub_key2);
+	wallet::create_raw_tx(10);
 	println!("{:?}", amount);
 }
 
