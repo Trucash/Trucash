@@ -45,7 +45,7 @@ pub fn init_utxo(receiver: &[CompressedRistretto]) -> Result<bool, SuperError> {
 	let mut pedersen_commitment = crypto::generate_pedersen(1_000_000u64, private_key.clone()).compress()
 																							  .to_bytes()
 																							  .to_vec();
-
+																							  
 	/// Generate the diffie-hellman public key
 	/// This is the shared secret between the reciever and the
 	/// network (because its scalar is just 0x01 padded with 32 bytes)

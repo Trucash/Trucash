@@ -152,10 +152,14 @@ pub fn get_balance(priv_key1: Scalar, pub_key2: CompressedRistretto) -> Result<(
 				masked_blinding.copy_from_slice(&utxo_bytes[96..128]);
 				let blinding_key = Scalar::from_bytes_mod_order(masked_blinding) - diffie_hellman_serialized;
 
-				utxos.extend_from_slice(&stealth_address.to_bytes()); //32
-				utxos.extend_from_slice(&amount.to_bytes()); //32
-				utxos.extend_from_slice(&blinding_key.to_bytes()); //32
-				utxos.extend_from_slice(&utxo_key.to_bytes()); //32
+				let pedersen_commit = &utxo_bytes[128..160];
+
+				utxos.extend_from_slice(&stealth_address.to_bytes()); //32 	0..32
+				utxos.extend_from_slice(&amount.to_bytes()); //32			32..64
+				utxos.extend_from_slice(&blinding_key.to_bytes()); //32		64..96
+				utxos.extend_from_slice(&utxo_key.to_bytes()); //32			96..128
+				utxos.extend_from_slice(pedersen_commit); //32				128..160
+				utxos.extend_from_slice(&i.0); //8							160..168
 			},
 			_ => break
 		}

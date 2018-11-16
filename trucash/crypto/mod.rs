@@ -1,5 +1,3 @@
-use error::SuperError;
-
 extern crate rand;
 use self::rand::OsRng;
 
@@ -17,8 +15,11 @@ extern crate bulletproofs;
 use self::bulletproofs::{ BulletproofGens, PedersenGens, RangeProof };
 
 extern crate sha2;
-
 use self::sha2::Sha512;
+
+use error::SuperError;
+
+pub mod schnorr;
 
 pub fn create_address() -> ([CompressedRistretto;2], [Scalar; 2]) {
 	let base_point = RISTRETTO_BASEPOINT_POINT;
@@ -37,6 +38,14 @@ pub fn generate_stealth_address(pub_addresses: &[CompressedRistretto], priv_key:
 	let first_half_of_key = Scalar::hash_from_bytes::<Sha512>(&(priv_key * pub_addresses[0].decompress().unwrap()).compress().to_bytes());
 	let address = (first_half_of_key * RISTRETTO_BASEPOINT_POINT) + pub_addresses[1].decompress().unwrap();
 	return address.compress();
+}
+
+/// H_s(aR)G + bG -> (H_s(aR) + b) * G
+pub fn recover_stealth_private_key(pub_key: CompressedRistretto, priv_keys: &[Scalar]) -> Scalar {
+	let first_half_of_key = Scalar::hash_from_bytes::<Sha512>(&(priv_keys[0] * pub_key.decompress().unwrap()).compress().to_bytes());
+	let second_half_of_key = priv_keys[1];
+	let priv_key = first_half_of_key + second_half_of_key;
+	return priv_key;
 }
 
 pub fn generate_scalar_one_keypair() -> (Scalar, CompressedRistretto) {
@@ -60,6 +69,7 @@ pub fn create_diffie_hellman(private_key: Scalar, public_key: CompressedRistrett
 	let secret_key = (private_key * public_key.decompress().unwrap()).compress();
 	return secret_key;
 }
+
 
 pub fn hash() {
 

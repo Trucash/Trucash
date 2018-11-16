@@ -1,14 +1,18 @@
-use database;
-use error::SuperError;
-
 extern crate curve25519_dalek;
 use self::curve25519_dalek::{ 	constants, scalar::Scalar, 
-								traits::MultiscalarMul, 
-								ristretto::{ RistrettoPoint, CompressedRistretto }
+								ristretto::{ CompressedRistretto }
 							};
 
+extern crate rand;
+use self::rand::OsRng;
+
 extern crate byteorder;
-use byteorder::{LittleEndian, WriteBytesExt, ReadBytesExt, BigEndian, ByteOrder};
+use byteorder::{LittleEndian, ReadBytesExt, ByteOrder};
+
+use crypto;
+use database;
+use error::SuperError;
+use transaction::*;
 
 pub fn get_balance(priv_key1: Scalar, pub_key2: CompressedRistretto) -> Result<u64, SuperError> {
 	let (balance, utxos) = database::get_balance(priv_key1, pub_key2)?;
@@ -29,7 +33,7 @@ pub fn get_balance(priv_key1: Scalar, pub_key2: CompressedRistretto) -> Result<u
 
 //send the tx
 
-pub fn create_raw_tx(/*priv_keys: &[Scalar], to_address: &[CompressedRistretto], version: &[u8;2],*/ amount_u64: u64) -> Result<bool, SuperError> {
+pub fn create_raw_tx(priv_keys: &[Scalar], to_address: &[CompressedRistretto], version: &[u8;2], amount_u64: u64) -> Result<bool, SuperError> {
 	let utxos = match database::read_wallet_db(vec![0,1]) {
 		Ok(i) => i,
 		Err(i) => return Err(i)
@@ -38,18 +42,51 @@ pub fn create_raw_tx(/*priv_keys: &[Scalar], to_address: &[CompressedRistretto],
 	let mut account_tally: u64 = 0;
 	let mut spend_bucket: Vec<u8> = Vec::new();
 
+	let mut csprng: OsRng = OsRng::new().unwrap();
+	let blinding_key: Scalar = Scalar::random(&mut csprng);
+
+	let mut inputs: Vec<Input> = Vec::new();
+
+	/// tally amount and get utxos
+	/// create the inputs
 	let mut i = 0;
 	while i < utxos.len() {
-		let utxo = &utxos[i..i+128];
+		let utxo = &utxos[i..i+136]; //increase by 136 because thats the length of each utxo byte vector
 		let mut amount_vec = &utxo[32..64];
-		account_tally += LittleEndian::read_u64(&mut amount_vec);
+		let amount_in_utxo = LittleEndian::read_u64(&mut amount_vec);
+		account_tally += amount_in_utxo;
+
+		let pedersen_commit = crypto::generate_pedersen(amount_in_utxo, blinding_key).compress();
+
+		let mut old_blinding_key: [u8;32] = [0;32];
+		old_blinding_key.copy_from_slice(&utxo[64..96]);
+		let old_blinding_key = Scalar::from_bytes_mod_order(old_blinding_key);
+
+		let key_for_signing_commit = old_blinding_key - blinding_key;
+
+		let mut utxo_ref_pub_key: [u8;32] = [0;32];
+		utxo_ref_pub_key.copy_from_slice(&utxos[96..128]);
+		let utxo_ref_pub_key = CompressedRistretto(utxo_ref_pub_key);
+		let private_key_for_stealth = crypto::recover_stealth_private_key(utxo_ref_pub_key, priv_keys);
+
+		//(old_blinding_key - blinding_key) * pc_gens.B_blinding == old_commit - new_commit
+
+		let input = Input {
+			utxo_reference: utxo[128..136].to_vec(),
+			commit: pedersen_commit.to_bytes().to_vec(),
+			commit_sig_size: Vec::new(),
+			commit_sig: Vec::new(),
+			owner_sig_size: Vec::new(),
+			owner_sig: Vec::new()
+		};
 
 		spend_bucket.extend_from_slice(utxo);
+
 		if account_tally >= amount_u64 {
 			break;
 		}
 
-		i += 128;
+		i += 136;
 	}
 
 	return Ok(true);

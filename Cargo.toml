@@ -11,6 +11,7 @@ bulletproofs = {path = "../bulletproofs"}
 merlin = "1.0.0-pre.0"
 byteorder = "*"
 sha2 = "*"
+ed25519-dalek = {path = "../ed25519-dalek"}
 
 [[bin]]
 path = "./trucash/main.rs"
