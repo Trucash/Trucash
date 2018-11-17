@@ -29,7 +29,6 @@ fn main() {
 	let amount = wallet::get_balance(priv_key1, pub_key2);
 	wallet::create_raw_tx(&[priv_key1, priv_key2], &[pub_key1, pub_key2], &[0,1], 1_000_000u64);
 
-	crypto::schnorr::test();
 }
 
 //pub key

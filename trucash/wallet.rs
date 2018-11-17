@@ -39,6 +39,13 @@ pub fn create_raw_tx(priv_keys: &[Scalar], to_address: &[CompressedRistretto], v
 		Err(i) => return Err(i)
 	};
 
+	let mut message_to_sign: Vec<u8> = Vec::new();
+	for i in to_address {
+		message_to_sign.extend_from_slice(&i.to_bytes());
+	}
+
+	println!("{:?}", message_to_sign);
+
 	let mut account_tally: u64 = 0;
 	let mut spend_bucket: Vec<u8> = Vec::new();
 
@@ -58,12 +65,14 @@ pub fn create_raw_tx(priv_keys: &[Scalar], to_address: &[CompressedRistretto], v
 
 		let pedersen_commit = crypto::generate_pedersen(amount_in_utxo, blinding_key).compress();
 
+		//get old blinding key for generating new key
 		let mut old_blinding_key: [u8;32] = [0;32];
 		old_blinding_key.copy_from_slice(&utxo[64..96]);
 		let old_blinding_key = Scalar::from_bytes_mod_order(old_blinding_key);
 
 		let key_for_signing_commit = old_blinding_key - blinding_key;
 
+		//recover stealth priv_key
 		let mut utxo_ref_pub_key: [u8;32] = [0;32];
 		utxo_ref_pub_key.copy_from_slice(&utxos[96..128]);
 		let utxo_ref_pub_key = CompressedRistretto(utxo_ref_pub_key);
@@ -74,9 +83,9 @@ pub fn create_raw_tx(priv_keys: &[Scalar], to_address: &[CompressedRistretto], v
 		let input = Input {
 			utxo_reference: utxo[128..136].to_vec(),
 			commit: pedersen_commit.to_bytes().to_vec(),
-			commit_sig_size: Vec::new(),
+			commit_key: key_for_signing_commit.to_bytes().to_vec(),
 			commit_sig: Vec::new(),
-			owner_sig_size: Vec::new(),
+			owner_key: private_key_for_stealth.to_bytes().to_vec(),
 			owner_sig: Vec::new()
 		};
 

@@ -12,10 +12,10 @@ pub struct Transaction {
 pub struct Input {
 	pub utxo_reference: Vec<u8>,	//8 byte
 	pub commit: Vec<u8>,			//32 byte		commit(blinding_key * G + amount * H)
-	pub commit_sig_size: Vec<u8>,	//1 byte
-	pub commit_sig: Vec<u8>,		//69-72 byte 	sig(old_blinding_key - blinding_key)
-	pub owner_sig_size: Vec<u8>,	//1 byte
-	pub owner_sig: Vec<u8>			//69-72 byte	sig(owner_stealth_address)
+	pub commit_key: Vec<u8>,		//32 byte		(this is not used for the actual tx, just storing the key for signing later)
+	pub commit_sig: Vec<u8>,		//64 byte 		sig(old_blinding_key - blinding_key)
+	pub owner_key: Vec<u8>,			//32 byte		(this is not used for the actual tx, just storing the key for signing later)
+	pub owner_sig: Vec<u8>			//64 byte		sig(owner_stealth_address)
 }
 
 #[derive(Debug)]
