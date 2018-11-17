@@ -1,5 +1,5 @@
 extern crate curve25519_dalek;
-use self::curve25519_dalek::{ 	constants, scalar::Scalar, 
+use self::curve25519_dalek::{ 	constants::RISTRETTO_BASEPOINT_POINT, scalar::Scalar, 
 								ristretto::{ CompressedRistretto }
 							};
 
@@ -10,6 +10,7 @@ extern crate byteorder;
 use byteorder::{LittleEndian, ReadBytesExt, ByteOrder};
 
 use crypto;
+use crypto::sha2::Sha512;
 use database;
 use error::SuperError;
 use transaction::*;
@@ -33,18 +34,11 @@ pub fn get_balance(priv_key1: Scalar, pub_key2: CompressedRistretto) -> Result<u
 
 //send the tx
 
-pub fn create_raw_tx(priv_keys: &[Scalar], to_address: &[CompressedRistretto], version: &[u8;2], amount_u64: u64) -> Result<bool, SuperError> {
+pub fn create_raw_tx(priv_keys: &[Scalar], to_address: &[ ([CompressedRistretto; 2], u64) ], version: &[u8;2], amount_u64: u64) -> Result<bool, SuperError> {
 	let utxos = match database::read_wallet_db(vec![0,1]) {
 		Ok(i) => i,
 		Err(i) => return Err(i)
 	};
-
-	let mut message_to_sign: Vec<u8> = Vec::new();
-	for i in to_address {
-		message_to_sign.extend_from_slice(&i.to_bytes());
-	}
-
-	println!("{:?}", message_to_sign);
 
 	let mut account_tally: u64 = 0;
 	let mut spend_bucket: Vec<u8> = Vec::new();
@@ -78,7 +72,7 @@ pub fn create_raw_tx(priv_keys: &[Scalar], to_address: &[CompressedRistretto], v
 		let utxo_ref_pub_key = CompressedRistretto(utxo_ref_pub_key);
 		let private_key_for_stealth = crypto::recover_stealth_private_key(utxo_ref_pub_key, priv_keys);
 
-		//(old_blinding_key - blinding_key) * pc_gens.B_blinding == old_commit - new_commit
+		// Note: (old_blinding_key - blinding_key) * pc_gens.B_blinding == old_commit - new_commit
 
 		let input = Input {
 			utxo_reference: utxo[128..136].to_vec(),
@@ -96,6 +90,35 @@ pub fn create_raw_tx(priv_keys: &[Scalar], to_address: &[CompressedRistretto], v
 		}
 
 		i += 136;
+	}
+
+	let mut outputs: Vec<Output> = Vec::new();
+
+	/// used for diffie-hellman exchange
+	let tx_priv_key: Scalar = Scalar::random(&mut csprng);
+	let blinding_key: Scalar = Scalar::random(&mut csprng);
+
+	/// create the outputs
+	for s in to_address {
+		let destination = s.0;
+		let amount: Scalar = s.1.into();
+
+		let diffie_hellman_key = crypto::create_diffie_hellman(tx_priv_key, destination[0]);
+		let diffie_hellman_serialized = Scalar::from_bytes_mod_order(diffie_hellman_key.to_bytes());
+		
+		let masked_amount = amount + Scalar::hash_from_bytes::<Sha512>(&diffie_hellman_serialized.to_bytes());
+		let masked_blinding = diffie_hellman_serialized + blinding_key;
+
+		let one_time_address = crypto::generate_stealth_address(&destination, tx_priv_key);
+
+		let commit = crypto::generate_pedersen(s.1, blinding_key);
+		let output = Output {
+			to_owner: one_time_address.to_bytes().to_vec(),
+			tx_pub_key: (tx_priv_key * RISTRETTO_BASEPOINT_POINT).compress().to_bytes().to_vec(),
+			masked_amount: masked_amount.to_bytes().to_vec(),
+			masked_blinding: masked_blinding.to_bytes().to_vec(),
+			commit: commit.compress().to_bytes().to_vec()
+		};
 	}
 
 	return Ok(true);

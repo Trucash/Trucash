@@ -10,6 +10,7 @@ use self::curve25519_dalek::{ 	scalar::Scalar,
 extern crate byteorder;
 use byteorder::{LittleEndian, WriteBytesExt, ReadBytesExt, BigEndian, ByteOrder};
 use crypto;
+use crypto::sha2::Sha512;
 
 use error::SuperError;
 
@@ -144,7 +145,7 @@ pub fn get_balance(priv_key1: Scalar, pub_key2: CompressedRistretto) -> Result<(
 				let diffie_hellman_serialized = Scalar::from_bytes_mod_order(diffie_hellman_key.to_bytes());
 
 				//reverse the diffie hellman masked amount
-				let amount = masked_amount - (diffie_hellman_serialized * diffie_hellman_serialized);
+				let amount = masked_amount - Scalar::hash_from_bytes::<Sha512>(&diffie_hellman_serialized.to_bytes());
 				let amount_uint = LittleEndian::read_u64(&mut amount.to_bytes());
 				balance += amount_uint;
 

@@ -27,7 +27,8 @@ fn main() {
 	let (priv_key1, priv_key2) = (Scalar::from_bytes_mod_order(priv_key1), Scalar::from_bytes_mod_order(priv_key2));
 
 	let amount = wallet::get_balance(priv_key1, pub_key2);
-	wallet::create_raw_tx(&[priv_key1, priv_key2], &[pub_key1, pub_key2], &[0,1], 1_000_000u64);
+	println!("{:?}", amount);
+	wallet::create_raw_tx(&[priv_key1, priv_key2], &[ ([pub_key1, pub_key2], 1_000_000u64) ], &[0,1], 1_000_000u64);
 
 }
 

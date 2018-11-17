@@ -1,5 +1,6 @@
 use database;
 use crypto;
+use crypto::sha2::Sha512;
 use error::SuperError;
 
 extern crate curve25519_dalek;
@@ -45,7 +46,7 @@ pub fn init_utxo(receiver: &[CompressedRistretto]) -> Result<bool, SuperError> {
 	let mut pedersen_commitment = crypto::generate_pedersen(1_000_000u64, private_key.clone()).compress()
 																							  .to_bytes()
 																							  .to_vec();
-																							  
+
 	/// Generate the diffie-hellman public key
 	/// This is the shared secret between the reciever and the
 	/// network (because its scalar is just 0x01 padded with 32 bytes)
@@ -65,7 +66,7 @@ pub fn init_utxo(receiver: &[CompressedRistretto]) -> Result<bool, SuperError> {
 	/// 1) secret = Scalar::from_bytes_mod_order((private_key_receiver * public_key).compress().to_bytes());
 	/// 2a) masked_amount - (secret * secret) = amount;
 	/// 2b) masked_amount - secret = private_key;
-	let masked_amount = (diffie_hellman_serialized * diffie_hellman_serialized) + amount;
+	let masked_amount = Scalar::hash_from_bytes::<Sha512>(&diffie_hellman_serialized.to_bytes()) + amount;
 	let masked_blinding_factor = diffie_hellman_serialized + private_key;
 
 	let stealth_address: CompressedRistretto = crypto::generate_stealth_address(receiver, private_key);

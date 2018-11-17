@@ -4,7 +4,7 @@ pub struct Transaction {
 	pub input_count: Vec<u8>,		//2 byte
 	pub inputs: Vec<Input>,		
 	pub output_count: Vec<u8>,		//2 byte
-	pub outputs: Vec<Ouput>,
+	pub outputs: Vec<Output>,
 	pub range_proofs: Vec<RangeProof>
 }
 
@@ -19,7 +19,7 @@ pub struct Input {
 }
 
 #[derive(Debug)]
-pub struct Ouput {
+pub struct Output {
 	pub to_owner: Vec<u8>, 			//32 byte 		stealth address
 	pub tx_pub_key: Vec<u8>,		//32 byte
 	pub masked_amount: Vec<u8>,		//32 byte

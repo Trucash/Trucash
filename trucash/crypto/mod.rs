@@ -14,7 +14,7 @@ use self::merlin::Transcript;
 extern crate bulletproofs;
 use self::bulletproofs::{ BulletproofGens, PedersenGens, RangeProof };
 
-extern crate sha2;
+pub extern crate sha2;
 use self::sha2::Sha512;
 
 use error::SuperError;
