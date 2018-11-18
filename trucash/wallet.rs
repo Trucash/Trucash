@@ -9,6 +9,11 @@ use self::rand::OsRng;
 extern crate byteorder;
 use byteorder::{LittleEndian, ReadBytesExt, ByteOrder};
 
+extern crate merlin;
+use self::merlin::Transcript;
+
+use crypto::bulletproofs::{ BulletproofGens, PedersenGens, RangeProof };
+
 use crypto;
 use crypto::sha2::Sha512;
 use database;
@@ -41,7 +46,6 @@ pub fn create_raw_tx(priv_keys: &[Scalar], to_address: &[ ([CompressedRistretto;
 	};
 
 	let mut account_tally: u64 = 0;
-	let mut spend_bucket: Vec<u8> = Vec::new();
 
 	let mut csprng: OsRng = OsRng::new().unwrap();
 	let blinding_key: Scalar = Scalar::random(&mut csprng);
@@ -52,12 +56,12 @@ pub fn create_raw_tx(priv_keys: &[Scalar], to_address: &[ ([CompressedRistretto;
 	/// create the inputs
 	let mut i = 0;
 	while i < utxos.len() {
-		let utxo = &utxos[i..i+136]; //increase by 136 because thats the length of each utxo byte vector
+		let utxo = &utxos[i..i+168]; //increase by 136 because thats the length of each utxo byte vector
 		let mut amount_vec = &utxo[32..64];
 		let amount_in_utxo = LittleEndian::read_u64(&mut amount_vec);
 		account_tally += amount_in_utxo;
 
-		let pedersen_commit = crypto::generate_pedersen(amount_in_utxo, blinding_key).compress();
+		let pedersen_commit = crypto::generate_pedersen(10, blinding_key).compress();
 
 		//get old blinding key for generating new key
 		let mut old_blinding_key: [u8;32] = [0;32];
@@ -70,12 +74,13 @@ pub fn create_raw_tx(priv_keys: &[Scalar], to_address: &[ ([CompressedRistretto;
 		let mut utxo_ref_pub_key: [u8;32] = [0;32];
 		utxo_ref_pub_key.copy_from_slice(&utxos[96..128]);
 		let utxo_ref_pub_key = CompressedRistretto(utxo_ref_pub_key);
+
 		let private_key_for_stealth = crypto::recover_stealth_private_key(utxo_ref_pub_key, priv_keys);
 
-		// Note: (old_blinding_key - blinding_key) * pc_gens.B_blinding == old_commit - new_commit
+		// Note: (old_blinding_key - blinding_key) * pc_gens.B_blinding == sum(old_commit_n) - sum(new_commit_n)
 
 		let input = Input {
-			utxo_reference: utxo[128..136].to_vec(),
+			utxo_reference: utxo[160..168].to_vec(),
 			commit: pedersen_commit.to_bytes().to_vec(),
 			commit_key: key_for_signing_commit.to_bytes().to_vec(),
 			commit_sig: Vec::new(),
@@ -83,13 +88,13 @@ pub fn create_raw_tx(priv_keys: &[Scalar], to_address: &[ ([CompressedRistretto;
 			owner_sig: Vec::new()
 		};
 
-		spend_bucket.extend_from_slice(utxo);
+		inputs.push(input);
 
 		if account_tally >= amount_u64 {
 			break;
 		}
 
-		i += 136;
+		i += 168;
 	}
 
 	let mut outputs: Vec<Output> = Vec::new();
@@ -99,9 +104,9 @@ pub fn create_raw_tx(priv_keys: &[Scalar], to_address: &[ ([CompressedRistretto;
 	let blinding_key: Scalar = Scalar::random(&mut csprng);
 
 	/// create the outputs
-	for s in to_address {
-		let destination = s.0;
-		let amount: Scalar = s.1.into();
+	for i in to_address {
+		let destination = i.0;
+		let amount: Scalar = i.1.into();
 
 		let diffie_hellman_key = crypto::create_diffie_hellman(tx_priv_key, destination[0]);
 		let diffie_hellman_serialized = Scalar::from_bytes_mod_order(diffie_hellman_key.to_bytes());
@@ -111,15 +116,85 @@ pub fn create_raw_tx(priv_keys: &[Scalar], to_address: &[ ([CompressedRistretto;
 
 		let one_time_address = crypto::generate_stealth_address(&destination, tx_priv_key);
 
-		let commit = crypto::generate_pedersen(s.1, blinding_key);
+		// generate range proof
+		let bp_gens = BulletproofGens::new(64, 1);
+		let pc_gens = PedersenGens::default();
+		let mut prover_transcript = Transcript::new(b"main");
+		let (proof, commit) = RangeProof::prove_single(
+													&bp_gens,
+													&pc_gens,
+													&mut prover_transcript,
+													i.1,
+													&blinding_key,
+													32,
+												).expect("Invalid range_proof");
+
+		let proof_bytes: Vec<u8> = proof.to_bytes().to_vec();
+
+		let mut proof_len: Vec<u8> = vec![0,0];
+		LittleEndian::write_u16(&mut proof_len, proof_bytes.len() as u16);
+
 		let output = Output {
 			to_owner: one_time_address.to_bytes().to_vec(),
 			tx_pub_key: (tx_priv_key * RISTRETTO_BASEPOINT_POINT).compress().to_bytes().to_vec(),
 			masked_amount: masked_amount.to_bytes().to_vec(),
 			masked_blinding: masked_blinding.to_bytes().to_vec(),
-			commit: commit.compress().to_bytes().to_vec()
+			commit: commit.to_bytes().to_vec(),
+			range_proof_len: proof_len,
+			range_proof: proof_bytes
 		};
+
+		outputs.push(output);
 	}
+
+	// get commit and normalized owner signature for each input
+	// todo: batch signatures for both owner and commit signing
+	let outputs_to_sign = Output::serialize(outputs.clone());
+	let RISTRETTO_HASHED_POINT = crypto::PedersenGens::default().B_blinding;
+	for mut i in &mut inputs {
+		let mut commit_priv_key: [u8; 32] = [0;32];
+		commit_priv_key.copy_from_slice(&i.commit_key[..]);
+		let commit_priv_key = Scalar::from_bytes_mod_order(commit_priv_key);
+
+		let commit_sig = crypto::schnorr::sign(commit_priv_key, &outputs_to_sign, RISTRETTO_HASHED_POINT);
+		let mut serialized_commit_sig: Vec<u8> = Vec::new();
+		serialized_commit_sig.extend_from_slice(&commit_sig.0.to_bytes());
+		serialized_commit_sig.extend_from_slice(&commit_sig.1.to_bytes());
+
+		i.commit_sig = serialized_commit_sig;
+
+		let mut owner_priv_key: [u8; 32] = [0;32];
+		owner_priv_key.copy_from_slice(&i.commit_key[..]);
+		let owner_priv_key = Scalar::from_bytes_mod_order(owner_priv_key);
+
+		let owner_sig = crypto::schnorr::sign(owner_priv_key, &outputs_to_sign, RISTRETTO_BASEPOINT_POINT);
+		let mut serialized_owner_sig: Vec<u8> = Vec::new();
+		serialized_owner_sig.extend_from_slice(&owner_sig.0.to_bytes());
+		serialized_owner_sig.extend_from_slice(&owner_sig.1.to_bytes());
+
+		i.owner_sig = serialized_owner_sig;
+	}
+
+	let mut input_count: Vec<u8> = vec![0;2];
+	LittleEndian::write_u16(&mut input_count, inputs.len() as u16);
+
+	let mut output_count: Vec<u8> = vec![0;2];
+	LittleEndian::write_u16(&mut output_count, outputs.len() as u16);
+
+	let mut tx = Transaction {
+		version: vec![0,1],
+		input_count: input_count,
+		inputs: inputs,
+		output_count: output_count,
+		outputs: outputs
+	};
+
+	//todo: seralize tx
+	let serialized_tx = tx.serialize_tx(); 
+	println!("{:?}",serialized_tx );
+
+
+	//println!("{:?}", tx);
 
 	return Ok(true);
 }

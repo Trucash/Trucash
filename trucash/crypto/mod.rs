@@ -11,8 +11,8 @@ use self::curve25519_dalek::{ 	constants, scalar::Scalar,
 extern crate merlin;
 use self::merlin::Transcript;
 
-extern crate bulletproofs;
-use self::bulletproofs::{ BulletproofGens, PedersenGens, RangeProof };
+pub extern crate bulletproofs;
+pub use self::bulletproofs::{ BulletproofGens, PedersenGens, RangeProof };
 
 pub extern crate sha2;
 use self::sha2::Sha512;
@@ -20,6 +20,10 @@ use self::sha2::Sha512;
 use error::SuperError;
 
 pub mod schnorr;
+
+pub fn bullet_proof() {
+
+}
 
 pub fn create_address() -> ([CompressedRistretto;2], [Scalar; 2]) {
 	let base_point = RISTRETTO_BASEPOINT_POINT;
